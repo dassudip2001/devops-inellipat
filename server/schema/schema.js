@@ -7,9 +7,10 @@ const {
   GraphQLSchema,
   GraphQLList,
   GraphQLNonNull,
+  GraphQLEnumType,
 } = require("graphql");
 
-// project type
+// Project Type
 const ProjectType = new GraphQLObjectType({
   name: "Project",
   fields: () => ({
@@ -26,7 +27,7 @@ const ProjectType = new GraphQLObjectType({
   }),
 });
 
-// client type
+// Client Type
 const ClientType = new GraphQLObjectType({
   name: "Client",
   fields: () => ({
@@ -40,7 +41,6 @@ const ClientType = new GraphQLObjectType({
 const RootQuery = new GraphQLObjectType({
   name: "RootQueryType",
   fields: {
-    // project query
     projects: {
       type: new GraphQLList(ProjectType),
       resolve(parent, args) {
@@ -70,10 +70,11 @@ const RootQuery = new GraphQLObjectType({
   },
 });
 
-// Mutation
+// Mutations
 const mutation = new GraphQLObjectType({
   name: "Mutation",
   fields: {
+    // Add a client
     addClient: {
       type: ClientType,
       args: {
@@ -82,30 +83,101 @@ const mutation = new GraphQLObjectType({
         phone: { type: GraphQLNonNull(GraphQLString) },
       },
       resolve(parent, args) {
-        let client = new Client({
+        const client = new Client({
           name: args.name,
           email: args.email,
           phone: args.phone,
         });
+
         return client.save();
       },
     },
+    // Delete a client
+    deleteClient: {
+      type: ClientType,
+      args: {
+        id: { type: GraphQLNonNull(GraphQLID) },
+      },
+      resolve(parent, args) {
+        Project.find({ clientId: args.id }).then((projects) => {
+          projects.forEach((project) => {
+            project.deleteOne();
+          });
+        });
+
+        return Client.findByIdAndRemove(args.id);
+      },
+    },
+    // Add a project
     addProject: {
       type: ProjectType,
       args: {
-        name: { type: GraphQLString },
-        description: { type: GraphQLString },
-        status: { type: GraphQLString },
-        clientId: { type: GraphQLID },
+        name: { type: GraphQLNonNull(GraphQLString) },
+        description: { type: GraphQLNonNull(GraphQLString) },
+        status: {
+          type: new GraphQLEnumType({
+            name: "ProjectStatus",
+            values: {
+              new: { value: "Not Started" },
+              progress: { value: "In Progress" },
+              completed: { value: "Completed" },
+            },
+          }),
+          defaultValue: "Not Started",
+        },
+        clientId: { type: GraphQLNonNull(GraphQLID) },
       },
       resolve(parent, args) {
-        let project = new Project({
+        const project = new Project({
           name: args.name,
           description: args.description,
           status: args.status,
           clientId: args.clientId,
         });
+
         return project.save();
+      },
+    },
+    // Delete a project
+    deleteProject: {
+      type: ProjectType,
+      args: {
+        id: { type: GraphQLNonNull(GraphQLID) },
+      },
+      resolve(parent, args) {
+        return Project.findByIdAndRemove(args.id);
+      },
+    },
+    // Update a project
+    updateProject: {
+      type: ProjectType,
+      args: {
+        id: { type: GraphQLNonNull(GraphQLID) },
+        name: { type: GraphQLString },
+        description: { type: GraphQLString },
+        status: {
+          type: new GraphQLEnumType({
+            name: "ProjectStatusUpdate",
+            values: {
+              new: { value: "Not Started" },
+              progress: { value: "In Progress" },
+              completed: { value: "Completed" },
+            },
+          }),
+        },
+      },
+      resolve(parent, args) {
+        return Project.findByIdAndUpdate(
+          args.id,
+          {
+            $set: {
+              name: args.name,
+              description: args.description,
+              status: args.status,
+            },
+          },
+          { new: true }
+        );
       },
     },
   },
